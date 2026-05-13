@@ -26,9 +26,11 @@ class Contract(db.Model):
 
     subscription_id = db.Column(db.String(100))
 
-    monthly_price_id = db.Column(db.String(100)) 
+    monthly_fee_price_id = db.Column(db.String(100)) 
+
+    inspection_fee_price_id = db.Column(db.String(100))
     
-    inspection_price_id = db.Column(db.String(100))
+    inspection_fee_subscription_item_id= db.Column(db.String(100))
 
     status = db.Column(db.String(50), default="active")
 

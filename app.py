@@ -6,8 +6,8 @@ import os
 from billing.customers import create_customer
 from billing.subscriptions import (
     create_product,
-    create_monthly_price,
-    create_inspection_price,
+    create_monthly_fee,
+    create_inspection_fee,
     create_subscription
 )
 from billing.webhooks import handle_webhook
@@ -19,7 +19,7 @@ from database.models import Contract
 
 # run jobs in background while Flask server is running
 from apscheduler.schedulers.background import BackgroundScheduler
-from scheduler.jobs import inspection_reminder
+from scheduler.jobs import inspection_reminder, remove_inspection_fee
 
 load_dotenv()
 
@@ -38,17 +38,17 @@ db.init_app(app)
 def home():
 
     customer= create_customer(
-        "dataBASE",
-        "dataBASE@example.com"
+        "may13inspectionFeeRemoved",
+        "may13inspectionFeeRemoved@example.com"
     )
 
     product= create_product()
-    monthly_price= create_monthly_price(product.id)
-    inspection_price= create_inspection_price(product.id)
-    subscription= create_subscription(
+    monthly_fee_price= create_monthly_fee(product.id)
+    inspection_fee_price= create_inspection_fee(product.id)
+    subscription, inspection_fee_subscription_item_id= create_subscription(
         customer.id,
-        monthly_price.id,
-        inspection_price.id
+        monthly_fee_price.id,
+        inspection_fee_price.id
     )
 
     contract = Contract(
@@ -57,16 +57,20 @@ def home():
 
     subscription_id=subscription.id,
 
-    monthly_price_id=monthly_price.id,
+    monthly_fee_price_id=monthly_fee_price.id,
 
-    inspection_price_id=inspection_price.id,
+    inspection_fee_price_id=inspection_fee_price.id,
+
+    inspection_fee_subscription_item_id=inspection_fee_subscription_item_id,
 
     status="active",
 
     start_date=date.today(),
 
     inspection_end_date=
-        date.today() + relativedelta(years=3),
+        # date.today() + relativedelta(years=3),
+        # testing
+        date.today(),
 
     contract_end_date=
         date.today() + relativedelta(years=50)
@@ -127,6 +131,14 @@ scheduler.add_job(
     func=inspection_reminder,
     # interval means: repeat forever every X time
     trigger='interval', 
+    seconds=10,
+    args=[app]
+)
+
+# remove_inspection_fee schedular job
+scheduler.add_job(
+    func=remove_inspection_fee,
+    trigger='interval',
     seconds=10,
     args=[app]
 )
