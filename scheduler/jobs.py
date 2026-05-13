@@ -53,23 +53,32 @@ def remove_inspection_fee(app):
             # if contract.inspection_fee_subscription_item_id:
             # means if contract.inspection_fee_subscription_item_id is not None: AND not empty
             # contract.inspection_fee_subscription_item_id acts like: Has this automation already been completed?
-            if (contract.inspection_end_date <= today and contract.inspection_fee_subscription_item_id):
+            if (
+                contract.inspection_end_date
+                and contract.inspection_end_date <= today 
+                and contract.inspection_fee_subscription_item_id):
                 print(f"Removing inspection fee for {contract.customer_id}")
+
+                # external APIs can fail
+                try:
+                    stripe.SubscriptionItem.delete(
+                        contract.inspection_fee_subscription_item_id
+                    )
+
+                    # means: inspection fee already removed
+                    # OTHERWISE AUTOMATIONS LOOP FOREVER
+                    # this is called State tracking
+                    contract.inspection_fee_subscription_item_id= None
+
+                    db.session.commit()
+
+                    print("Inspection fee removed.")
+
+                except Exception as e:
+                    print("Stripe deletion failed: ", e)
+
             else:
                 print("No inspection fee removal needed.")
-
-                stripe.SubscriptionItem.delete(
-                    contract.inspection_fee_subscription_item_id
-                )
-
-                # means: inspection fee already removed
-                # OTHERWISE AUTOMATIONS LOOP FOREVER
-                # this is called State tracking
-                contract.inspection_fee_subscription_item_id= None
-
-                db.session.commit()
-
-                print("Inspection fee removed.")
 
 
 # Idempotency mindset
