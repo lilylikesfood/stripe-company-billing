@@ -98,7 +98,13 @@ def contracts():
     return result
 
 # test dynamic webhook behavior
+@app.route("/test-overdue")
+def test_overdue():
+    contract= Contract.query.first()
+    contract.status= "overdue"
+    db.session.commit()
 
+    return "Contract marked overdue"
 
 if __name__ == "__main__":
 
