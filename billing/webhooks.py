@@ -79,6 +79,22 @@ def handle_webhook():
 
             print("Contract canceled")
 
+    # Subscription Status Tracking
+    if event['type'] == 'customer.subscription.updated':
+        subscription= event['data']['object']
+        subscription_id= subscription['id']
+
+        contract= Contract.query.filter_by(
+            subscription_id=subscription_id
+        ).first()
+
+        if contract:
+            contract.subscription_status= subscription['status']
+
+            db.session.commit()
+
+            print("Subscription status updated")
+
     return '', 200
 
 # system definition
@@ -91,3 +107,5 @@ def handle_webhook():
 # inspection_due	inspection period ended
 # suspended	        temporarily disabled
 # pending	        awaiting first payment
+
+# '' & "" Both are strings
