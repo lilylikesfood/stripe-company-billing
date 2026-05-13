@@ -106,9 +106,19 @@ def test_overdue():
 
     return "Contract marked overdue"
 
+# test canceled behavior
+@app.route("/cancel-test")
+def cancel_test():
+    contract= Contract.query.first()
+    contract.status= "canceled"
+
+    db.session.commit()
+
+    return "Contract canceled"
+
 if __name__ == "__main__":
 
     with app.app_context():
         db.create_all()
 
-    app.run(port=5000)
+    app.run(port=5000, debug=True)

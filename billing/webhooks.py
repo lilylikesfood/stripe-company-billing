@@ -61,5 +61,33 @@ def handle_webhook():
             db.session.commit()
 
             print("Contract marked active")
+    
+    if event['type'] == 'customer.subscription.deleted':
+        subscription= event['data']['object']
+        subscription_id= subscription['id']
+
+        contract= Contract.query.filter_by(
+            # Why subscription_id better than customer_id:
+            # one customer can have multiple subscriptions
+            subscription_id= subscription_id
+        ).first()
+
+        if contract:
+            contract.status= "canceled"
+
+            db.session.commit()
+
+            print("Contract canceled")
 
     return '', 200
+
+# system definition
+# Status	        Meaning
+# -----------------------------------------------
+# active	        subscription healthy
+# overdue	        payment failed
+# canceled	        subscription canceled
+# expired	        contract fully ended
+# inspection_due	inspection period ended
+# suspended	        temporarily disabled
+# pending	        awaiting first payment
