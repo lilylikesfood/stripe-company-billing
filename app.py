@@ -17,6 +17,10 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from database.models import Contract
 
+# run jobs in background while Flask server is running
+from apscheduler.schedulers.background import BackgroundScheduler
+from scheduler.jobs import inspection_reminder
+
 load_dotenv()
 
 stripe.api_key= os.getenv("STRIPE_SECRET_KEY")
@@ -115,6 +119,19 @@ def cancel_test():
     db.session.commit()
 
     return "Contract canceled"
+
+# Scheduler = run code automatically on time
+scheduler= BackgroundScheduler()
+
+scheduler.add_job(
+    func=inspection_reminder,
+    # interval means: repeat forever every X time
+    trigger='interval', 
+    seconds=10,
+    args=[app]
+)
+
+scheduler.start()
 
 if __name__ == "__main__":
 
