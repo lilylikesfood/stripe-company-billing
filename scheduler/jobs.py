@@ -108,5 +108,63 @@ def expire_contracts(app):
             else: 
                 print("No contract expiration needed. ")
 
+
+# test retrieve stripe data
+def test_stripe_retrieval(app):
+    with app.app_context():
+        contracts= Contract.query.all()
+
+        for contract in contracts:
+            print("Checking contract: ", contract.customer_id)
+
+            subscription= stripe.Subscription.retrieve(
+                contract.subscription_id
+            )
+
+            print(subscription)
+            print(
+                "Stripe subscription status: ", subscription['status']
+            )
+
+# Reconciliation job (repairs consistency)
+# Periodically verify that our DB and Stripe still match.
+# webhooks are NOT guaranteed -> could fail
+# reconciliation jobs = safety net
+def reconile_subscription_status(app):
+    with app.app_context():
+        print("Running reconciliation job")
+        contracts= Contract.query.all()
+
+        for contract in contracts:
+            print("Checking contract: ", contract.customer_id)
+
+            try:
+                subscription= stripe.Subscription.retrieve(
+                    contract.subscription_id
+                )
+
+                stripe_status= subscription['status']
+
+                print("Stripe subscription status: ", stripe_status)
+                print("Database subscription status: ", contract.subscription_status)
+
+                # mismatch detection
+                if contract.subscription_status != stripe_status:
+                    print("Status mismatch detected!!")
+
+                    contract.subscription_status= stripe_status
+
+                    db.session.commit()
+
+                    print("Database corrected. ")
+                    print("Updated DB status:", contract.subscription_status
+                    )
+                else:
+                    print("Statuses already synced. ")
+            
+            except Exception as e:
+                print("Reconciliation failed: ", e)
+
+
 # Idempotency mindset
 # Running automation multiple times should not break things

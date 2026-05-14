@@ -19,7 +19,7 @@ from database.models import Contract
 
 # run jobs in background while Flask server is running
 from apscheduler.schedulers.background import BackgroundScheduler
-from scheduler.jobs import inspection_reminder, remove_inspection_fee, expire_contracts
+from scheduler.jobs import inspection_reminder, remove_inspection_fee, expire_contracts, test_stripe_retrieval, reconile_subscription_status
 
 load_dotenv()
 
@@ -134,7 +134,7 @@ scheduler.add_job(
     func=inspection_reminder,
     # interval means: repeat forever every X time
     trigger='interval', 
-    seconds=10,
+    seconds=20,
     args=[app]
 )
 
@@ -142,7 +142,7 @@ scheduler.add_job(
 scheduler.add_job(
     func=remove_inspection_fee,
     trigger='interval',
-    seconds=10,
+    seconds=20,
     args=[app]
 )
 
@@ -150,10 +150,20 @@ scheduler.add_job(
 scheduler.add_job(
     func=expire_contracts,
     trigger='interval',
-    seconds=10,
+    seconds=20,
     args=[app]
 )
 
+# Reconciliation job
+scheduler.add_job(
+    func=reconile_subscription_status,
+    trigger='interval',
+    seconds=30,
+    args=[app]
+)
+
+# testing retrieve stripe data
+test_stripe_retrieval(app)
 
 scheduler.start()
 
