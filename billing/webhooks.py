@@ -27,6 +27,9 @@ def handle_webhook():
         print(e)
         return str(e), 400
     
+    # webhook logging mindset (helps debugging)
+    print("Webhook event:", event['type'])
+
     if event['type'] == 'invoice.payment_failed':
         invoice= event['data']['object']
         customer_id= invoice['customer']
@@ -46,7 +49,7 @@ def handle_webhook():
             db.session.commit()
             print("Contract marked overdue")
 
-    if event['type'] == 'invoice.paid':
+    elif event['type'] == 'invoice.paid':
         invoice= event['data']['object']
         customer_id = invoice['customer']
 
@@ -62,7 +65,7 @@ def handle_webhook():
 
             print("Contract marked active")
     
-    if event['type'] == 'customer.subscription.deleted':
+    elif event['type'] == 'customer.subscription.deleted':
         subscription= event['data']['object']
         subscription_id= subscription['id']
 
@@ -80,7 +83,7 @@ def handle_webhook():
             print("Contract canceled")
 
     # Subscription Status Tracking
-    if event['type'] == 'customer.subscription.updated':
+    elif event['type'] == 'customer.subscription.updated':
         subscription= event['data']['object']
         subscription_id= subscription['id']
 

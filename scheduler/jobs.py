@@ -80,6 +80,33 @@ def remove_inspection_fee(app):
             else:
                 print("No inspection fee removal needed.")
 
+# Contract expiration automation
+def expire_contracts(app):
+    with app.app_context(): 
+        contracts= Contract.query.all()
+
+        today= date.today()
+
+        print("Running contract expiration job")
+
+        for contract in contracts:
+            print("Contract End Date:", contract.contract_end_date)
+            print("Today:", today)
+            print("Current Status:", contract.status)
+
+            if (
+                contract.contract_end_date <= today
+                # idempotency
+                # state tracking
+                and contract.status != 'expired'):
+                contract.status= 'expired'
+
+                db.session.commit()
+
+                print(f"Contract expired for {contract.customer_id}")
+
+            else: 
+                print("No contract expiration needed. ")
 
 # Idempotency mindset
 # Running automation multiple times should not break things

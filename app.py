@@ -19,7 +19,7 @@ from database.models import Contract
 
 # run jobs in background while Flask server is running
 from apscheduler.schedulers.background import BackgroundScheduler
-from scheduler.jobs import inspection_reminder, remove_inspection_fee
+from scheduler.jobs import inspection_reminder, remove_inspection_fee, expire_contracts
 
 load_dotenv()
 
@@ -73,7 +73,10 @@ def home():
         date.today(),
 
     contract_end_date=
-        date.today() + relativedelta(years=50)
+        # date.today() + relativedelta(years=50)
+        # testig
+        date.today(),
+
 )
 
     db.session.add(contract)
@@ -142,6 +145,15 @@ scheduler.add_job(
     seconds=10,
     args=[app]
 )
+
+# Contract expiration automation
+scheduler.add_job(
+    func=expire_contracts,
+    trigger='interval',
+    seconds=10,
+    args=[app]
+)
+
 
 scheduler.start()
 
