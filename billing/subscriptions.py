@@ -3,7 +3,7 @@ import stripe
 def create_product():
 
     product = stripe.Product.create(
-        name="May13_inspectionFeeRemoved"
+        name="May14"
     )
 
     return product

@@ -51,3 +51,18 @@ class Contract(db.Model):
         # lambda fixes it -> run this later when row is created
         default=lambda: datetime.now(timezone.utc)
     )
+
+# Webhook Event Logging
+# audit trail (if sth breaks, can trace back)
+class WebhookEvent(db.Model):
+    id= db.Column(db.Integer, primary_key=True)
+
+    stripe_event_id= db.Column(db.String(100), unique=True)
+
+    event_type= db.Column(db.String(100))
+
+    processed= db.Column(db.Boolean, default=False)
+
+    created_at= db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    last_reconciliation_at= db.Column(db.DateTime)

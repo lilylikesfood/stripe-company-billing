@@ -19,7 +19,9 @@ from database.models import Contract
 
 # run jobs in background while Flask server is running
 from apscheduler.schedulers.background import BackgroundScheduler
-from scheduler.jobs import inspection_reminder, remove_inspection_fee, expire_contracts, test_stripe_retrieval, reconile_subscription_status
+from scheduler.jobs import inspection_reminder, remove_inspection_fee, expire_contracts, test_stripe_retrieval, reconcile_subscription_status
+
+from flask_migrate import Migrate
 
 load_dotenv()
 
@@ -34,12 +36,15 @@ app.config['SQLALCHEMY_DATABASE_URI']= 'sqlite:///contracts.db'
 
 db.init_app(app)
 
+# migrate Flask application & SQLAlchemy database
+migrate= Migrate(app, db)
+
 @app.route("/")
 def home():
 
     customer= create_customer(
-        "may13inspectionFeeRemoved",
-        "may13inspectionFeeRemoved@example.com"
+        "may14",
+        "may14@example.com"
     )
 
     product= create_product()
@@ -156,7 +161,7 @@ scheduler.add_job(
 
 # Reconciliation job
 scheduler.add_job(
-    func=reconile_subscription_status,
+    func=reconcile_subscription_status,
     trigger='interval',
     seconds=30,
     args=[app]

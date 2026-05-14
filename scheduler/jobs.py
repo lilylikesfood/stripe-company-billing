@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from dateutil.relativedelta import relativedelta
 
 from database.models import Contract,db
@@ -130,7 +130,7 @@ def test_stripe_retrieval(app):
 # Periodically verify that our DB and Stripe still match.
 # webhooks are NOT guaranteed -> could fail
 # reconciliation jobs = safety net
-def reconile_subscription_status(app):
+def reconcile_subscription_status(app):
     with app.app_context():
         print("Running reconciliation job")
         contracts= Contract.query.all()
@@ -150,9 +150,10 @@ def reconile_subscription_status(app):
 
                 # mismatch detection
                 if contract.subscription_status != stripe_status:
-                    print("Status mismatch detected!!")
+                    print("Status mismatch detected!!!")
 
                     contract.subscription_status= stripe_status
+                    contract.last_reconciliation_at= datetime.now(timezone.utc)
 
                     db.session.commit()
 
@@ -160,6 +161,10 @@ def reconile_subscription_status(app):
                     print("Updated DB status:", contract.subscription_status
                     )
                 else:
+                    contract.last_reconciliation_at = datetime.now(timezone.utc)
+
+                    db.session.commit()
+
                     print("Statuses already synced. ")
             
             except Exception as e:
