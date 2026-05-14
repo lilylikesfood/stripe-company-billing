@@ -4,7 +4,9 @@ import os
 from flask import request
 from dotenv import load_dotenv
 
-from database.models import Contract, db
+from database.models import Contract, db, WebhookEvent
+
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -23,10 +25,31 @@ def handle_webhook():
             endpoint_secret
         )
 
+        # Prevent Stripe from processing the SAME webhook twice
+        stripe_event_id= event['id']
+
+        existing_event= WebhookEvent.query.filter_by(
+            stripe_event_id= stripe_event_id
+        ).first()
+
+        if existing_event:
+            print("Webhook already processed. :D")
+
+            return '', 200
+        
+        webhook_event= WebhookEvent(
+            stripe_event_id= stripe_event_id,
+            event_type=event['type']
+        )
+
+        db.session.add(webhook_event)
+        db.session.commit()
+
     except Exception as e:
         print(e)
         return str(e), 400
     
+    # Business logic starts
     # webhook logging mindset (helps debugging)
     print("Webhook event:", event['type'])
 
@@ -97,6 +120,11 @@ def handle_webhook():
             db.session.commit()
 
             print("Subscription status updated")
+
+    webhook_event.processed= True
+    webhook_event.processed_at= datetime.now(timezone.utc)
+
+    db.session.commit()
 
     return '', 200
 

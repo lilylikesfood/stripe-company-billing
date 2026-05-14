@@ -61,8 +61,18 @@ class WebhookEvent(db.Model):
 
     event_type= db.Column(db.String(100))
 
-    processed= db.Column(db.Boolean, default=False)
+    processed= db.Column(db.Boolean, default=False, nullable=False)
 
-    created_at= db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # Replay-safe webhook processing(Idempotent webhook handling)
+    processed_at= db.Column(
+        db.DateTime, 
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    created_at= db.Column(
+        db.DateTime, 
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
 
     last_reconciliation_at= db.Column(db.DateTime)
