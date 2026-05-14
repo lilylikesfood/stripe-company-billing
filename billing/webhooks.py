@@ -32,18 +32,26 @@ def handle_webhook():
             stripe_event_id= stripe_event_id
         ).first()
 
-        if existing_event:
-            print("Webhook already processed. :D")
+        if existing_event and existing_event.processed:
+            print("Webhook already fully processed. :D")
 
             return '', 200
         
-        webhook_event= WebhookEvent(
-            stripe_event_id= stripe_event_id,
-            event_type=event['type']
-        )
+        # prevent databe crash from when Stripe retries use the SAME event ID
+        # if not thing:
+        # usually means: "If thing does not exist"
+        if not existing_event:
+            webhook_event= WebhookEvent(
+                stripe_event_id= stripe_event_id,
+                event_type=event['type']
+            )
+            # it return None or actual object, not false or true
 
-        db.session.add(webhook_event)
-        db.session.commit()
+            db.session.add(webhook_event)
+            db.session.commit()
+        
+        else:
+            webhook_event= existing_event
 
     except Exception as e:
         print(e)
@@ -140,3 +148,22 @@ def handle_webhook():
 # pending	        awaiting first payment
 
 # '' & "" Both are strings
+
+# CASE 1 — Brand New Webhook
+# Database finds NOTHING.
+# So:
+# existing_event = None
+# Then:
+# not existing_event
+# becomes:
+# not None
+# Python evaluates that as:
+# True
+# So:
+# if not existing_event:
+# DOES execute.
+
+# Value	    Truthy/Falsy
+# -----------------------
+# None	    False
+# actual    object	True
