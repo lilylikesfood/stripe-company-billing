@@ -18,12 +18,19 @@ def handle_webhook():
 
     sig_header= request.headers.get('Stripe-Signature')
 
+    # try/except is mainly protecting construct_event for invalid signature, malformed payload, Stripe verification failure
     try: 
         event= stripe.Webhook.construct_event(
             payload,
             sig_header,
             endpoint_secret
         )
+        # webhook verification should not be put in transaction bcz 
+        # it’s external verification logic
+        # not database state
+        # Transactions should usually protect:
+        # database consistency
+        # not external API parsing
 
         # Prevent Stripe from processing the SAME webhook twice
         stripe_event_id= event['id']
@@ -32,12 +39,25 @@ def handle_webhook():
             stripe_event_id= stripe_event_id
         ).first()
 
+        # should stay outside transaction bcz it’s just a quick read/check
+        # we want fast early exit
+        # no reason to open transaction if already completed
         if existing_event and existing_event.processed:
             print("Webhook already fully processed. :D")
 
             return '', 200
+    except Exception as e:
+        print(e)
+        return str(e), 400
         
-        # prevent databe crash from when Stripe retries use the SAME event ID
+    # Database transactions- A transaction groups multiple database changes into one all-or-nothing operation.
+    # Either EVERYTHING succeeds OR NOTHING succeeds 
+    # Transaction Should Protect EVERYTHING Database-Related
+    with db.session.begin():
+    # meaning: "Start protected transaction block."
+    # automatically commits if successful Or rolls back if crash happens
+
+        # prevent database crash when Stripe retries use the SAME event ID
         # if not thing:
         # usually means: "If thing does not exist"
         if not existing_event:
@@ -48,91 +68,77 @@ def handle_webhook():
             # it return None or actual object, not false or true
 
             db.session.add(webhook_event)
-            db.session.commit()
         
         else:
             webhook_event= existing_event
 
-    except Exception as e:
-        print(e)
-        return str(e), 400
-    
-    # Business logic starts
-    # webhook logging mindset (helps debugging)
-    print("Webhook event:", event['type'])
+        # Business logic starts
+        # webhook logging mindset (helps debugging)
+        print("Webhook event:", event['type'])
 
-    if event['type'] == 'invoice.payment_failed':
-        invoice= event['data']['object']
-        customer_id= invoice['customer']
+        if event['type'] == 'invoice.payment_failed':
+            invoice= event['data']['object']
+            customer_id= invoice['customer']
+            
+            # debugging
+            print("Webhook customer:", customer_id)
+
+            contract= Contract.query.filter_by(
+                customer_id= customer_id
+            ).first()
+
+            # debugging
+            print("Found contract:", contract)
+
+            if contract:
+                contract.status= "overdue"
+                print("Contract marked overdue")
+
+        elif event['type'] == 'invoice.paid':
+            invoice= event['data']['object']
+            customer_id = invoice['customer']
+
+            contract = Contract.query.filter_by(
+                customer_id=customer_id
+            ).first()
+
+            if contract:
+
+                contract.status = "active"
+
+                print("Contract marked active")
         
-        # debugging
-        print("Webhook customer:", customer_id)
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription= event['data']['object']
+            subscription_id= subscription['id']
 
-        contract= Contract.query.filter_by(
-            customer_id= customer_id
-        ).first()
+            contract= Contract.query.filter_by(
+                # Why subscription_id better than customer_id:
+                # one customer can have multiple subscriptions
+                subscription_id= subscription_id
+            ).first()
 
-        # debugging
-        print("Found contract:", contract)
+            if contract:
+                contract.status= "canceled"
 
-        if contract:
-            contract.status= "overdue"
-            db.session.commit()
-            print("Contract marked overdue")
+                print("Contract canceled")
 
-    elif event['type'] == 'invoice.paid':
-        invoice= event['data']['object']
-        customer_id = invoice['customer']
+        # Subscription Status Tracking
+        elif event['type'] == 'customer.subscription.updated':
+            subscription= event['data']['object']
+            subscription_id= subscription['id']
 
-        contract = Contract.query.filter_by(
-            customer_id=customer_id
-        ).first()
+            contract= Contract.query.filter_by(
+                subscription_id=subscription_id
+            ).first()
 
-        if contract:
+            if contract:
+                contract.subscription_status= subscription['status']
 
-            contract.status = "active"
+                print("Subscription status updated")
 
-            db.session.commit()
-
-            print("Contract marked active")
-    
-    elif event['type'] == 'customer.subscription.deleted':
-        subscription= event['data']['object']
-        subscription_id= subscription['id']
-
-        contract= Contract.query.filter_by(
-            # Why subscription_id better than customer_id:
-            # one customer can have multiple subscriptions
-            subscription_id= subscription_id
-        ).first()
-
-        if contract:
-            contract.status= "canceled"
-
-            db.session.commit()
-
-            print("Contract canceled")
-
-    # Subscription Status Tracking
-    elif event['type'] == 'customer.subscription.updated':
-        subscription= event['data']['object']
-        subscription_id= subscription['id']
-
-        contract= Contract.query.filter_by(
-            subscription_id=subscription_id
-        ).first()
-
-        if contract:
-            contract.subscription_status= subscription['status']
-
-            db.session.commit()
-
-            print("Subscription status updated")
-
-    webhook_event.processed= True
-    webhook_event.processed_at= datetime.now(timezone.utc)
-
-    db.session.commit()
+        webhook_event.processed= True
+        webhook_event.processed_at= datetime.now(timezone.utc)
 
     return '', 200
 
