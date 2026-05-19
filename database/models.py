@@ -76,3 +76,6 @@ class WebhookEvent(db.Model):
     )
 
     last_reconciliation_at= db.Column(db.DateTime)
+
+    # Failed Webhook Recovery
+    payload= db.Column(db.JSON)

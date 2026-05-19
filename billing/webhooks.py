@@ -49,6 +49,23 @@ def handle_webhook():
     except Exception as e:
         print(e)
         return str(e), 400
+    
+    # Persist Event First
+    # prevent database crash when Stripe retries use the SAME event ID
+    # if not thing:
+    # usually means: "If thing does not exist"
+    if not existing_event:
+        webhook_event= WebhookEvent(
+            stripe_event_id= stripe_event_id,
+            event_type=event['type']
+        )
+        # it return None or actual object, not false or true
+
+        db.session.add(webhook_event)
+        db.session.commit()
+    
+    else:
+        webhook_event= existing_event
         
     # Database transactions- A transaction groups multiple database changes into one all-or-nothing operation.
     # Either EVERYTHING succeeds OR NOTHING succeeds 
@@ -56,21 +73,6 @@ def handle_webhook():
     with db.session.begin():
     # meaning: "Start protected transaction block."
     # automatically commits if successful Or rolls back if crash happens
-
-        # prevent database crash when Stripe retries use the SAME event ID
-        # if not thing:
-        # usually means: "If thing does not exist"
-        if not existing_event:
-            webhook_event= WebhookEvent(
-                stripe_event_id= stripe_event_id,
-                event_type=event['type']
-            )
-            # it return None or actual object, not false or true
-
-            db.session.add(webhook_event)
-        
-        else:
-            webhook_event= existing_event
 
         # Business logic starts
         # webhook logging mindset (helps debugging)
