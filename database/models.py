@@ -28,6 +28,8 @@ class Contract(db.Model):
 
     subscription_status = db.Column(db.String(50))
 
+    last_reconciliation_at= db.Column(db.DateTime)
+
     monthly_fee_price_id = db.Column(db.String(100)) 
 
     inspection_fee_price_id = db.Column(db.String(100))
@@ -75,7 +77,13 @@ class WebhookEvent(db.Model):
         nullable=False
     )
 
-    last_reconciliation_at= db.Column(db.DateTime)
-
     # Failed Webhook Recovery
     payload= db.Column(db.JSON)
+
+    # retry tracking
+    retry_count= db.Column(
+        db.Integer, 
+        default=0
+    )
+
+    last_error= db.Column(db.Text)

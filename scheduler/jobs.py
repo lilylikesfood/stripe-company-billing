@@ -8,6 +8,9 @@ import stripe
 # error: circular import
 # from app import app
 
+from billing.webhooks import process_webhook_event
+from database.models import WebhookEvent
+
 # This file handles: scheduled business automation
 # annual increases
 # removing inspection fee
@@ -169,6 +172,46 @@ def reconcile_subscription_status(app):
             
             except Exception as e:
                 print("Reconciliation failed: ", e)
+
+# replay-safe recovery (event-driven state recovery architecture)
+def retry_failed_webhooks(app):
+    with app.app_context():
+        failed_events= WebhookEvent.query.filter_by(
+            processed=False
+        ).all()
+
+        # len ->how many items inside the thing
+        print(f"Found {len(failed_events)} failed webhook(s). ")
+
+        for webhook_event in failed_events:
+            print("Retrying: ", webhook_event.stripe_event_id)
+
+            event= webhook_event.payload
+
+            # Dead-letter queue behavior
+            # Stop retrying permanently broken jobs
+            if webhook_event.retry_count >= 10:
+                print("Webhook permanently failed. Manual investigation required. ")
+
+                # Skip the rest of this loop iteration and move to the next item
+                continue
+
+            try:
+                with db.session.begin():
+                    process_webhook_event(event, webhook_event)
+
+                    webhook_event.last_error= None
+
+                print("Webhook replay succeeded. ")
+
+            except Exception as e:
+                print("Webhook replay failed: ", e)
+
+                webhook_event.retry_count= webhook_event.retry_count + 1
+
+                webhook_event.last_error= str(e)
+
+                db.session.commit()
 
 
 # Idempotency mindset
