@@ -176,42 +176,51 @@ def reconcile_subscription_status(app):
 # replay-safe recovery (event-driven state recovery architecture)
 def retry_failed_webhooks(app):
     with app.app_context():
-        failed_events= WebhookEvent.query.filter_by(
-            processed=False
-        ).all()
+        with db.session.begin():
+            failed_events= (
+                WebhookEvent.query
+                .filter_by(processed=False)
+                # Concurrency
+                # Row Locking
+                # Nobody else may modify/read-for-processing this row until I'm done
+                # This prevents duplicate processing
+                # the lock must happen BEFORE you start looping.
+                # Otherwise another worker could grab the same rows at the same time.
+                # A row lock belongs to a SPECIFIC database transaction.
+                # row lock only work inside transaction
+                .with_for_update()
+                .all()
+            )
 
-        # len ->how many items inside the thing
-        print(f"Found {len(failed_events)} failed webhook(s). ")
+            # len ->how many items inside the thing
+            print(f"Found {len(failed_events)} failed webhook(s). ")
 
-        for webhook_event in failed_events:
-            print("Retrying: ", webhook_event.stripe_event_id)
+            for webhook_event in failed_events:
+                print("Retrying: ", webhook_event.stripe_event_id)
 
-            event= webhook_event.payload
+                event= webhook_event.payload
 
-            # Dead-letter queue behavior
-            # Stop retrying permanently broken jobs
-            if webhook_event.retry_count >= 10:
-                print("Webhook permanently failed. Manual investigation required. ")
+                # Dead-letter queue behavior
+                # Stop retrying permanently broken jobs
+                if webhook_event.retry_count >= 10:
+                    print("Webhook permanently failed. Manual investigation required. ")
 
-                # Skip the rest of this loop iteration and move to the next item
-                continue
+                    # Skip the rest of this loop iteration and move to the next item
+                    continue
 
-            try:
-                with db.session.begin():
+                try:
                     process_webhook_event(event, webhook_event)
 
                     webhook_event.last_error= None
 
-                print("Webhook replay succeeded. ")
+                    print("Webhook replay succeeded. ")
 
-            except Exception as e:
-                print("Webhook replay failed: ", e)
+                except Exception as e:
+                    print("Webhook replay failed: ", e)
 
-                webhook_event.retry_count= webhook_event.retry_count + 1
+                    webhook_event.retry_count= webhook_event.retry_count + 1
 
-                webhook_event.last_error= str(e)
-
-                db.session.commit()
+                    webhook_event.last_error= str(e)
 
 
 # Idempotency mindset
