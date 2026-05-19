@@ -222,6 +222,9 @@ def retry_failed_webhooks(app):
 
                     webhook_event.last_error= str(e)
 
+                # record retry timestamp (BOTH success and failure)
+                webhook_event.last_retry_at= datetime.now(timezone.utc)
+
 
 # Idempotency mindset
 # Running automation multiple times should not break things

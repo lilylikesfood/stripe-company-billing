@@ -87,3 +87,5 @@ class WebhookEvent(db.Model):
     )
 
     last_error= db.Column(db.Text)
+
+    last_retry_at= db.Column(db.DateTime)
