@@ -12,16 +12,91 @@ load_dotenv()
 
 endpoint_secret= os.getenv("STRIPE_WEBHOOK_SECRET")
 
+"""
+Apply Stripe webhook business logic
+and update webhook processing state.
+"""
+# Separate Business Logic From HTTP Route
+def process_webhook_event(event, webhook_event):
+    # Business logic starts
+    # webhook logging mindset (helps debugging)
+    print("Webhook event:", event['type'])
+
+    if event['type'] == 'invoice.payment_failed':
+        invoice= event['data']['object']
+        customer_id= invoice['customer']
+        
+        # debugging
+        print("Webhook customer:", customer_id)
+
+        contract= Contract.query.filter_by(
+            customer_id= customer_id
+        ).first()
+
+        # debugging
+        print("Found contract:", contract)
+
+        if contract:
+            contract.status= "overdue"
+            print("Contract marked overdue")
+
+    elif event['type'] == 'invoice.paid':
+        invoice= event['data']['object']
+        customer_id = invoice['customer']
+
+        contract = Contract.query.filter_by(
+            customer_id=customer_id
+        ).first()
+
+        if contract:
+
+            contract.status = "active"
+
+            print("Contract marked active")
+    
+    elif event['type'] == 'customer.subscription.deleted':
+        subscription= event['data']['object']
+        subscription_id= subscription['id']
+
+        contract= Contract.query.filter_by(
+            # Why subscription_id better than customer_id:
+            # one customer can have multiple subscriptions
+            subscription_id= subscription_id
+        ).first()
+
+        if contract:
+            contract.status= "canceled"
+
+            print("Contract canceled")
+
+    # Subscription Status Tracking
+    elif event['type'] == 'customer.subscription.updated':
+        subscription= event['data']['object']
+        subscription_id= subscription['id']
+
+        contract= Contract.query.filter_by(
+            subscription_id=subscription_id
+        ).first()
+
+        if contract:
+            contract.subscription_status= subscription['status']
+
+            print("Subscription status updated")
+
+    webhook_event.processed= True
+    webhook_event.processed_at= datetime.now(timezone.utc)
+
+
 def handle_webhook():
 
-    payload= request.data
+    raw_payload= request.data
 
     sig_header= request.headers.get('Stripe-Signature')
 
     # try/except is mainly protecting construct_event for invalid signature, malformed payload, Stripe verification failure
     try: 
         event= stripe.Webhook.construct_event(
-            payload,
+            raw_payload,
             sig_header,
             endpoint_secret
         )
@@ -57,7 +132,8 @@ def handle_webhook():
     if not existing_event:
         webhook_event= WebhookEvent(
             stripe_event_id= stripe_event_id,
-            event_type=event['type']
+            event_type=event['type'],
+            payload=event
         )
         # it return None or actual object, not false or true
 
@@ -74,73 +150,7 @@ def handle_webhook():
     # meaning: "Start protected transaction block."
     # automatically commits if successful Or rolls back if crash happens
 
-        # Business logic starts
-        # webhook logging mindset (helps debugging)
-        print("Webhook event:", event['type'])
-
-        if event['type'] == 'invoice.payment_failed':
-            invoice= event['data']['object']
-            customer_id= invoice['customer']
-            
-            # debugging
-            print("Webhook customer:", customer_id)
-
-            contract= Contract.query.filter_by(
-                customer_id= customer_id
-            ).first()
-
-            # debugging
-            print("Found contract:", contract)
-
-            if contract:
-                contract.status= "overdue"
-                print("Contract marked overdue")
-
-        elif event['type'] == 'invoice.paid':
-            invoice= event['data']['object']
-            customer_id = invoice['customer']
-
-            contract = Contract.query.filter_by(
-                customer_id=customer_id
-            ).first()
-
-            if contract:
-
-                contract.status = "active"
-
-                print("Contract marked active")
-        
-        elif event['type'] == 'customer.subscription.deleted':
-            subscription= event['data']['object']
-            subscription_id= subscription['id']
-
-            contract= Contract.query.filter_by(
-                # Why subscription_id better than customer_id:
-                # one customer can have multiple subscriptions
-                subscription_id= subscription_id
-            ).first()
-
-            if contract:
-                contract.status= "canceled"
-
-                print("Contract canceled")
-
-        # Subscription Status Tracking
-        elif event['type'] == 'customer.subscription.updated':
-            subscription= event['data']['object']
-            subscription_id= subscription['id']
-
-            contract= Contract.query.filter_by(
-                subscription_id=subscription_id
-            ).first()
-
-            if contract:
-                contract.subscription_status= subscription['status']
-
-                print("Subscription status updated")
-
-        webhook_event.processed= True
-        webhook_event.processed_at= datetime.now(timezone.utc)
+        process_webhook_event(event, webhook_event)
 
     return '', 200
 
