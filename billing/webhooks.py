@@ -12,12 +12,12 @@ load_dotenv()
 
 endpoint_secret= os.getenv("STRIPE_WEBHOOK_SECRET")
 
-"""
-Apply Stripe webhook business logic
-and update webhook processing state.
-"""
 # Separate Business Logic From HTTP Route
 def process_webhook_event(event, webhook_event):
+    """
+    Apply Stripe webhook business logic
+    and update webhook processing state.
+    """
     # Business logic starts
     # webhook logging mindset (helps debugging)
     print("Webhook event:", event['type'])
@@ -133,7 +133,9 @@ def handle_webhook():
         webhook_event= WebhookEvent(
             stripe_event_id= stripe_event_id,
             event_type=event['type'],
-            payload=event
+            # serialization
+            # Convert Stripe custom object into normal Python dictionary
+            payload=event.to_dict()
         )
         # it return None or actual object, not false or true
 
